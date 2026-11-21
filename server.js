@@ -1,10 +1,10 @@
-require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
 const { sequelize, testConnection, syncDatabase } = require("./models");
+require("dotenv").config();
 
 // Import core routes
 const authRoutes = require("./routes/auth");
@@ -19,12 +19,14 @@ const locationRoutes = require("./routes/locations");
 const notificationRoutes = require("./routes/notifications");
 const shopSettingsRoutes = require("./routes/shopSettings");
 const dashboardRoutes = require("./routes/dashboardRoutes");
+// ============================================
+// IMPORT BACKUP ROUTES - MOVE THESE UP HERE
+// ============================================
 const backupRoutes = require("./routes/backup");
 const backupManagerRoutes = require("./routes/backupManager");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const isVercel = process.env.VERCEL === "1";
 
 // Helper function to get local IP address
 function getLocalIP() {
@@ -43,9 +45,7 @@ function getLocalIP() {
 const LOCAL_IP = getLocalIP();
 console.log(`🌐 Detected local IP: ${LOCAL_IP}`);
 
-// ============================================
-// MIDDLEWARE
-// ============================================
+// Middleware
 app.use(
   cors({
     origin: [
@@ -61,11 +61,12 @@ app.use(
 );
 
 // Parse JSON and urlencoded data
+// Parse JSON and urlencoded data
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
-// Static files for uploads - sirf local par (Vercel par disk read-only hai)
-if (!isVercel && process.env.NODE_ENV !== "production") {
+// Static files for uploads — sirf local par
+if (process.env.NODE_ENV !== "production") {
   const uploadsDir = path.join(__dirname, "uploads");
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
@@ -74,30 +75,80 @@ if (!isVercel && process.env.NODE_ENV !== "production") {
   app.use("/uploads", express.static(uploadsDir));
 }
 
+// Request logging middleware (for development)
+if (process.env.NODE_ENV === "development") {
+  app.use((req, res, next) => {
+    next();
+  });
+}
+
 // ============================================
 // CORE ROUTES
 // ============================================
+
+// Auth routes
 app.use("/api/auth", authRoutes);
+// console.log("✅ Auth routes loaded");
+
+// Product routes
 app.use("/api/products", productRoutes);
+// console.log("✅ Product routes loaded");
+
+// Sales routes
 app.use("/api/sales", salesRoutes);
+// console.log("✅ Sales routes loaded");
+
+// Customer routes
 app.use("/api/customers", customerRoutes);
+// console.log("✅ Customer routes loaded");
+
+// Employee routes
 app.use("/api/employees", employeeRoutes);
+// console.log("✅ Employee routes loaded");
+
+// Expense routes
 app.use("/api/expenses", expenseRoutes);
+// console.log("✅ Expense routes loaded");
+
+// Category routes
 app.use("/api/categories", categoryRoutes);
+// console.log("✅ Category routes loaded");
+
+// Inventory routes
 app.use("/api/inventory", inventoryRoutes);
+// console.log("✅ Inventory routes loaded");
+
+// Location routes
 app.use("/api/locations", locationRoutes);
+// console.log("✅ Location routes loaded");
+
+// Notification routes
 app.use("/api/notifications", notificationRoutes);
+// console.log("✅ Notification routes loaded");
+
+// Shop settings routes
 app.use("/api/shop-settings", shopSettingsRoutes);
+// console.log("✅ Shop settings routes loaded");
+
+// Dashboard routes
 app.use("/api/dashboard", dashboardRoutes);
+// console.log("✅ Dashboard routes loaded");
 app.use("/api/return-exchange", require("./routes/returnExchange"));
 
-// Backup routes
+// ============================================
+// BACKUP ROUTES - REGISTER HERE BEFORE SERVER STARTS
+// ============================================
 app.use("/api/backup", backupRoutes);
+// console.log("✅ Backup routes loaded");
+
 app.use("/api/backup-manager", backupManagerRoutes);
+// console.log("✅ Backup manager routes loaded");
 
 // ============================================
 // TEST AND HEALTH ROUTES
 // ============================================
+
+// Test route
 app.get("/api/test", (req, res) => {
   res.json({
     message: "Server is running",
@@ -124,6 +175,7 @@ app.get("/api/test", (req, res) => {
   });
 });
 
+// Health check route
 app.get("/api/health", (req, res) => {
   res.json({
     status: "OK",
@@ -135,6 +187,7 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+// Root route
 app.get("/", (req, res) => {
   res.json({
     message: "Shop Management System API",
@@ -160,9 +213,9 @@ app.use((req, res) => {
 // ERROR HANDLING MIDDLEWARE
 // ============================================
 app.use((err, req, res, next) => {
-  // Vercel Logs mein asal error nazar aaye is liye logging on hai
-  console.error("❌ Server error:", err);
+  // console.error("❌ Server error:", err);
 
+  // Handle specific error types
   if (err.name === "SequelizeValidationError") {
     return res.status(400).json({
       message: "Validation error",
@@ -190,6 +243,7 @@ app.use((err, req, res, next) => {
     });
   }
 
+  // JWT errors
   if (err.name === "JsonWebTokenError") {
     return res.status(401).json({ message: "Invalid token" });
   }
@@ -198,10 +252,12 @@ app.use((err, req, res, next) => {
     return res.status(401).json({ message: "Token expired" });
   }
 
+  // Multer errors
   if (err.code === "LIMIT_FILE_SIZE") {
     return res.status(400).json({ message: "File too large. Max size: 5MB" });
   }
 
+  // Default error response
   res.status(500).json({
     message: "Internal server error",
     error: process.env.NODE_ENV === "development" ? err.message : undefined,
@@ -209,7 +265,7 @@ app.use((err, req, res, next) => {
 });
 
 // ============================================
-// START SERVER (sirf local par)
+// START SERVER
 // ============================================
 const startServer = async () => {
   try {
@@ -232,6 +288,21 @@ const startServer = async () => {
       console.log(`🔗 Local URL: http://localhost:${PORT}/api/test`);
       console.log(`📡 Network URL: http://${LOCAL_IP}:${PORT}/api/test`);
       console.log(`📱 Access from other devices: http://${LOCAL_IP}:${PORT}`);
+      console.log("\n📋 Available routes:");
+      console.log("   - /api/auth/*");
+      console.log("   - /api/products/*");
+      console.log("   - /api/sales/*");
+      console.log("   - /api/customers/*");
+      console.log("   - /api/employees/*");
+      console.log("   - /api/expenses/*");
+      console.log("   - /api/categories/*");
+      console.log("   - /api/inventory/*");
+      console.log("   - /api/locations/*");
+      console.log("   - /api/notifications/*");
+      console.log("   - /api/shop-settings/*");
+      console.log("   - /api/dashboard/*");
+      console.log("   - /api/backup/*");
+      console.log("   - /api/backup-manager/*");
     });
   } catch (error) {
     console.error("❌ Failed to start server:", error);
@@ -261,36 +332,34 @@ const startServer = async () => {
   }
 };
 
-if (!isVercel) {
-  // Local development: process handlers + server start
-  process.on("uncaughtException", (error) => {
-    console.error("❌ Uncaught Exception:", error);
-    process.exit(1);
+// Handle uncaught exceptions
+process.on("uncaughtException", (error) => {
+  console.error("❌ Uncaught Exception:", error);
+  process.exit(1);
+});
+
+// Handle unhandled promise rejections
+process.on("unhandledRejection", (error) => {
+  console.error("❌ Unhandled Rejection:", error);
+  process.exit(1);
+});
+
+// Graceful shutdown
+process.on("SIGTERM", () => {
+  console.log("🛑 SIGTERM received. Closing server...");
+  sequelize.close().then(() => {
+    console.log("✅ Database connection closed");
+    process.exit(0);
   });
+});
 
-  process.on("unhandledRejection", (error) => {
-    console.error("❌ Unhandled Rejection:", error);
-    process.exit(1);
+process.on("SIGINT", () => {
+  console.log("🛑 SIGINT received. Closing server...");
+  sequelize.close().then(() => {
+    console.log("✅ Database connection closed");
+    process.exit(0);
   });
+});
 
-  process.on("SIGTERM", () => {
-    console.log("🛑 SIGTERM received. Closing server...");
-    sequelize.close().then(() => {
-      console.log("✅ Database connection closed");
-      process.exit(0);
-    });
-  });
-
-  process.on("SIGINT", () => {
-    console.log("🛑 SIGINT received. Closing server...");
-    sequelize.close().then(() => {
-      console.log("✅ Database connection closed");
-      process.exit(0);
-    });
-  });
-
-  startServer();
-}
-
-// Vercel ke liye app export zaroori hai
-module.exports = app;
+// Start the server
+startServer();

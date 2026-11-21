@@ -1,29 +1,30 @@
 const { Sequelize } = require("sequelize");
+const mysql2 = require("mysql2");
 require("dotenv").config();
 
-let sequelize;
+const useSSL = process.env.DB_SSL === "true";
 
-if (process.env.MYSQL_URL) {
-  sequelize = new Sequelize(process.env.MYSQL_URL, {
-    dialect: "mysql",
-    logging: false,
-    pool: { max: 10, min: 0, acquire: 30000, idle: 10000 },
-    dialectOptions: { ssl: false },
-  });
-} else {
-  sequelize = new Sequelize(
-    process.env.DB_NAME || "shop_management",
-    process.env.DB_USER || "root",
-    process.env.DB_PASSWORD || "",
-    {
-      host: process.env.DB_HOST || "localhost",
-      port: process.env.DB_PORT || 3306,
-      dialect: "mysql",
-      logging: false,
-      pool: { max: 10, min: 0, acquire: 30000, idle: 10000 },
-    },
-  );
-}
+const commonOptions = {
+  dialect: "mysql",
+  dialectModule: mysql2,
+  logging: false,
+  // Serverless ke liye chhota pool
+  pool: { max: 2, min: 0, acquire: 30000, idle: 10000 },
+  dialectOptions: useSSL
+    ? { ssl: { minVersion: "TLSv1.2", rejectUnauthorized: true } }
+    : {},
+};
+
+const sequelize = new Sequelize(
+  process.env.DB_NAME || "shop_management",
+  process.env.DB_USER || "root",
+  process.env.DB_PASSWORD || "",
+  {
+    ...commonOptions,
+    host: process.env.DB_HOST || "localhost",
+    port: Number(process.env.DB_PORT) || 3306,
+  },
+);
 
 const testConnection = async () => {
   try {
